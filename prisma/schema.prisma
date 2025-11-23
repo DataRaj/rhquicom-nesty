@@ -1,0 +1,163 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// Core Models (Better Auth Schema)
+// https://www.better-auth.com/docs/concepts/database
+// ============================================
+
+enum Role {
+  User
+  Admin
+}
+
+/// User model - Core user information
+model User {
+  id                String    @id @default(uuid()) @db.Uuid
+  username          String    @unique
+  displayUsername   String?
+  email             String    @unique
+  isEmailVerified   Boolean   @default(false) @map("isEmailVerified")
+  role              Role      @default(User)
+  firstName         String?
+  lastName          String?
+  image             String?
+  bio               String?
+  twoFactorEnabled  Boolean   @default(false)
+  
+  // Timestamps
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  deletedAt         DateTime? @map("deletedAt")
+  
+  // Relations
+  accounts          Account[]
+  sessions          Session[]
+  twoFactors        TwoFactor[]
+  passkeys          PassKey[]
+  
+  @@index([username], name: "idx_user_username")
+  @@index([email], name: "idx_user_email")
+  @@index([deletedAt], name: "idx_user_deleted_at")
+  @@map("user")
+}
+
+/// Account model - OAuth and credential accounts
+model Account {
+  id                      String    @id @default(uuid()) @db.Uuid
+  userId                  String    @db.Uuid
+  accountId               String
+  providerId              String    @default("credential")
+  accessToken             String?
+  refreshToken            String?
+  accessTokenExpiresAt    DateTime? @db.Timestamp
+  refreshTokenExpiresAt   DateTime? @db.Timestamp
+  scope                   String?
+  idToken                 String?
+  password                String?
+  
+  // Timestamps
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
+  deletedAt               DateTime? @map("deletedAt")
+  
+  // Relations
+  user                    User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId], name: "idx_account_user_id")
+  @@index([accountId], name: "idx_account_account_id")
+  @@map("account")
+}
+
+/// Session model - User sessions (fallback to DB if not using Redis)
+model Session {
+  id          String    @id @default(uuid()) @db.Uuid
+  userId      String    @db.Uuid
+  token       String    @unique
+  expiresAt   DateTime  @db.Timestamp
+  ipAddress   String?
+  userAgent   String?
+  
+  // Timestamps
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime? @map("deletedAt")
+  
+  // Relations
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId], name: "idx_session_user_id")
+  @@index([token], name: "idx_session_token")
+  @@index([expiresAt], name: "idx_session_expires_at")
+  @@map("session")
+}
+
+/// Verification model - Email/phone verification codes
+model Verification {
+  id          String    @id @default(uuid()) @db.Uuid
+  identifier  String
+  value       String
+  expiresAt   DateTime  @db.Timestamp
+  
+  // Timestamps
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime? @map("deletedAt")
+  
+  @@index([identifier], name: "idx_verification_identifier")
+  @@index([expiresAt], name: "idx_verification_expires_at")
+  @@map("verification")
+}
+
+/// TwoFactor model - Two-factor authentication settings
+model TwoFactor {
+  id          String    @id @default(uuid()) @db.Uuid
+  userId      String    @db.Uuid
+  secret      String?
+  backupCodes String?
+  
+  // Timestamps
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime? @map("deletedAt")
+  
+  // Relations
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId], name: "idx_two_factor_user_id")
+  @@map("twoFactor")
+}
+
+/// PassKey model - Passkey (WebAuthn) credentials
+model PassKey {
+  id            String    @id @default(uuid()) @db.Uuid
+  name          String?
+  userId        String    @db.Uuid
+  publicKey     String
+  credentialID  String
+  counter       Int
+  deviceType    String
+  backedUp      String
+  transports    String
+  
+  // Timestamps
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  deletedAt     DateTime? @map("deletedAt")
+  
+  // Relations
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId], name: "idx_passkey_user_id")
+  @@index([credentialID], name: "idx_passkey_credential_id")
+  @@map("passkey")
+}
