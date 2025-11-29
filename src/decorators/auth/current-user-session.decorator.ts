@@ -12,10 +12,7 @@ export type CurrentUserSession = UserSessionType & {
 };
 
 export const CurrentUserSession = createParamDecorator(
-  (
-    data: keyof UserSessionType | 'headers',
-    ctx: ExecutionContext,
-  ): CurrentUserSession => {
+  (data: keyof UserSessionType | 'headers', ctx: ExecutionContext) => {
     const contextType: ContextType & 'graphql' = ctx.getType();
 
     let request: FastifyRequest & UserSessionType;
@@ -27,11 +24,14 @@ export const CurrentUserSession = createParamDecorator(
       request = ctx.switchToHttp().getRequest();
     }
 
-    return data == null
-      ? {
-          ...request?.session,
-          headers: request?.headers,
-        }
-      : request.session?.[data];
+    if (data) {
+      return request?.[data as keyof (FastifyRequest & UserSessionType)];
+    }
+
+    return {
+      session: request?.session,
+      user: request?.user,
+      headers: request?.headers,
+    };
   },
 );
