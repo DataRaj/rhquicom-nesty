@@ -4,7 +4,7 @@ import databaseConfig from '@/config/database/database.config';
 import mailConfig from '@/config/mail/mail.config';
 import redisConfig from '@/config/redis/redis.config';
 import { BullBoardModule } from '@bull-board/nestjs';
-import { ApolloDriver, ApolloDriverConfig } from '@nestjs/apollo';
+import { YogaDriver, YogaDriverConfig } from '@graphql-yoga/nestjs';
 import { BullModule } from '@nestjs/bullmq';
 import { DynamicModule, Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
@@ -36,6 +36,7 @@ import { default as sentryConfig } from './config/sentry/sentry.config';
 import { default as throttlerConfig } from './config/throttler/throttler.config';
 import { default as useThrottlerFactory } from './config/throttler/throttler.factory';
 import { AppThrottlerGuard } from './config/throttler/throttler.guard';
+import { DrizzleModule } from './drizzle/drizzle.module';
 import { default as useGraphqlFactory } from './graphql/graphql.factory';
 import { default as useI18nFactory } from './i18n/i18n.factory';
 import { CacheModule as CacheManagerModule } from './shared/cache/cache.module';
@@ -43,7 +44,6 @@ import { MailModule } from './shared/mail/mail.module';
 import { SocketModule } from './shared/socket/socket.module';
 import { default as useLoggerFactory } from './tools/logger/logger-factory';
 import { WorkerModule } from './worker/worker.module';
-import { PrismaModule } from './database/prisma.module';
 
 @Module({})
 export class AppModule {
@@ -79,7 +79,8 @@ export class AppModule {
           useFactory: useLoggerFactory,
         }),
         // TypeORM replaced by Prisma
-        PrismaModule,
+        // TypeORM replaced by Prisma, then Drizzle
+        DrizzleModule,
         BullModule.forRootAsync({
           imports: [ConfigModule],
           inject: [ConfigService],
@@ -105,8 +106,8 @@ export class AppModule {
           inject: [ConfigService],
           useFactory: useI18nFactory,
         }),
-        GraphQLModule.forRootAsync<ApolloDriverConfig>({
-          driver: ApolloDriver,
+        GraphQLModule.forRootAsync<YogaDriverConfig>({
+          driver: YogaDriver,
           imports: [ConfigModule],
           inject: [ConfigService],
           useFactory: useGraphqlFactory,

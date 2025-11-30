@@ -1,11 +1,18 @@
 import { AuthService } from '@/auth/auth.service';
 import { ErrorDto } from '@/common/dto/error.dto';
 import { GlobalConfig } from '@/config/config.type';
-import { PrismaService } from '@/database/prisma.service';
 import { Public } from '@/decorators/public.decorator';
+import { DRIZZLE_DB } from '@/drizzle/drizzle.module';
+import * as schema from '@/drizzle/schema';
 import { SWAGGER_PATH } from '@/tools/swagger/swagger.setup';
 import { Serialize } from '@/utils/interceptors/serialize';
-import { Controller, Get, HttpStatus, Injectable } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  HttpStatus,
+  Inject,
+  Injectable,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { RedisOptions, Transport } from '@nestjs/microservices';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
@@ -18,31 +25,32 @@ import {
   HttpHealthIndicator,
   MicroserviceHealthIndicator,
 } from '@nestjs/terminus';
+import { sql } from 'drizzle-orm';
+import { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { HealthCheckDto } from './dto/health.dto';
 
 /**
- * Prisma Health Indicator
- * 
- * Prisma 데이터베이스 연결 상태를 확인하는 Health Indicator입니다.
+ * Drizzle Health Indicator
+ *
+ * Drizzle 데이터베이스 연결 상태를 확인하는 Health Indicator입니다.
  */
 @Injectable()
-export class PrismaHealthIndicator extends HealthIndicator {
-  constructor(private readonly prisma: PrismaService) {
+export class DrizzleHealthIndicator extends HealthIndicator {
+  constructor(
+    @Inject(DRIZZLE_DB) private readonly db: NodePgDatabase<typeof schema>,
+  ) {
     super();
   }
 
-  async pingCheck(key: string, options?: { timeout?: number }): Promise<HealthIndicatorResult> {
+  async pingCheck(
+    key: string,
+    _options?: { timeout?: number },
+  ): Promise<HealthIndicatorResult> {
     try {
-      const isHealthy = await this.prisma.isHealthy();
-      const result = this.getStatus(key, isHealthy, { message: 'Prisma is up' });
-      
-      if (isHealthy) {
-        return result;
-      }
-      
-      throw new Error('Prisma connection failed');
+      await this.db.execute(sql`SELECT 1`);
+      return this.getStatus(key, true, { message: 'Drizzle is up' });
     } catch (error) {
-      throw new Error(`Prisma health check failed: ${error.message}`);
+      throw new Error(`Drizzle health check failed: ${error.message}`);
     }
   }
 }
@@ -54,7 +62,7 @@ export class HealthController {
     private readonly configService: ConfigService<GlobalConfig>,
     private readonly health: HealthCheckService,
     private readonly http: HttpHealthIndicator,
-    private readonly prismaHealthIndicator: PrismaHealthIndicator,
+    private readonly drizzleHealthIndicator: DrizzleHealthIndicator,
     private readonly microservice: MicroserviceHealthIndicator,
     private readonly authService: AuthService,
   ) {}
@@ -74,7 +82,8 @@ export class HealthController {
   @HealthCheck()
   async check(): Promise<HealthCheckResult> {
     const list = [
-      () => this.prismaHealthIndicator.pingCheck('database', { timeout: 5000 }),
+      () =>
+        this.drizzleHealthIndicator.pingCheck('database', { timeout: 5000 }),
       () =>
         this.microservice.pingCheck<RedisOptions>('redis', {
           transport: Transport.REDIS,
